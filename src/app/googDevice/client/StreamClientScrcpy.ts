@@ -37,6 +37,7 @@ type StartParams = {
     player?: BasePlayer;
     fitToScreen?: boolean;
     videoSettings?: VideoSettings;
+    container?: HTMLElement;
 };
 
 const TAG = '[StreamClientScrcpy]';
@@ -49,6 +50,8 @@ export class StreamClientScrcpy
     private static players: Map<string, PlayerClass> = new Map<string, PlayerClass>();
 
     private controlButtons?: HTMLElement;
+    private videoDiv?: HTMLElement;
+    private stopFn?: () => void;
     private deviceName = '';
     private clientId = -1;
     private clientsCount = -1;
@@ -103,12 +106,13 @@ export class StreamClientScrcpy
         player?: BasePlayer,
         fitToScreen?: boolean,
         videoSettings?: VideoSettings,
+        container?: HTMLElement,
     ): StreamClientScrcpy {
         if (query instanceof URLSearchParams) {
             const params = StreamClientScrcpy.parseParameters(query);
-            return new StreamClientScrcpy(params, streamReceiver, player, fitToScreen, videoSettings);
+            return new StreamClientScrcpy(params, streamReceiver, player, fitToScreen, videoSettings, container);
         } else {
-            return new StreamClientScrcpy(query, streamReceiver, player, fitToScreen, videoSettings);
+            return new StreamClientScrcpy(query, streamReceiver, player, fitToScreen, videoSettings, container);
         }
     }
 
@@ -133,6 +137,7 @@ export class StreamClientScrcpy
         player?: BasePlayer,
         fitToScreen?: boolean,
         videoSettings?: VideoSettings,
+        container?: HTMLElement,
     ) {
         super(params);
         if (streamReceiver) {
@@ -148,8 +153,10 @@ export class StreamClientScrcpy
         if (typeof fitToScreen !== 'boolean') {
             fitToScreen = this.params.fitToScreen;
         }
-        this.startStream({ udid, player, playerName, fitToScreen, videoSettings });
-        this.setBodyClass('stream');
+        this.startStream({ udid, player, playerName, fitToScreen, videoSettings, container });
+        if (!container) {
+            this.setBodyClass('stream');
+        }
     }
 
     public static parseParameters(params: URLSearchParams): ParamsStreamScrcpy {
@@ -274,7 +281,7 @@ export class StreamClientScrcpy
         }
     };
 
-    public startStream({ udid, player, playerName, videoSettings, fitToScreen }: StartParams): void {
+    public startStream({ udid, player, playerName, videoSettings, fitToScreen, container }: StartParams): void {
         if (!udid) {
             throw Error(`Invalid udid value: "${udid}"`);
         }
@@ -315,15 +322,12 @@ export class StreamClientScrcpy
             if (parent) {
                 parent.removeChild(deviceView);
             }
-            parent = moreBox.parentElement;
-            if (parent) {
-                parent.removeChild(moreBox);
-            }
             this.streamReceiver.stop();
             if (this.player) {
                 this.player.stop();
             }
         };
+        this.stopFn = stop;
 
         const googMoreBox = (this.moreBox = new GoogMoreBox(udid, player, this));
         const moreBox = googMoreBox.getHolderElement();
@@ -335,12 +339,13 @@ export class StreamClientScrcpy
         deviceView.appendChild(this.controlButtons);
         const video = document.createElement('div');
         video.className = 'video';
+        this.videoDiv = video;
         deviceView.appendChild(video);
         deviceView.appendChild(moreBox);
         player.setParent(video);
         player.pause();
 
-        document.body.appendChild(deviceView);
+        (container ?? document.body).appendChild(deviceView);
         if (fitToScreen) {
             const newBounds = this.getMaxSize();
             if (newBounds) {
@@ -395,6 +400,10 @@ export class StreamClientScrcpy
         this.sendNewVideoSetting(updated);
     };
 
+    public stop(): void {
+        this.stopFn?.();
+    }
+
     public sendMessage(message: ControlMessage): void {
         this.streamReceiver.sendEvent(message);
     }
@@ -429,6 +438,13 @@ export class StreamClientScrcpy
     }
 
     public getMaxSize(): Size | undefined {
+        if (this.videoDiv) {
+            const w = this.videoDiv.clientWidth & ~15;
+            const h = this.videoDiv.clientHeight & ~15;
+            if (w && h) {
+                return new Size(w, h);
+            }
+        }
         if (!this.controlButtons) {
             return;
         }

@@ -5,6 +5,7 @@ import { ACTION } from '../../../common/Action';
 import GoogDeviceDescriptor from '../../../types/GoogDeviceDescriptor';
 import { ControlCenterCommand } from '../../../common/ControlCenterCommand';
 import { StreamClientScrcpy } from './StreamClientScrcpy';
+import { TileView } from './TileView';
 import SvgImage from '../../ui/SvgImage';
 import { html } from '../../ui/HtmlTag';
 import Util from '../../Util';
@@ -36,6 +37,7 @@ export class DeviceTracker extends BaseDeviceTracker<GoogDeviceDescriptor, never
     private static instancesByUrl: Map<string, DeviceTracker> = new Map();
     protected static tools: Set<Tool> = new Set();
     protected tableId = 'goog_device_list';
+    private activeTileView?: TileView;
 
     public static start(hostItem: HostItem): DeviceTracker {
         const url = this.buildUrlForTracker(hostItem).toString();
@@ -60,6 +62,76 @@ export class DeviceTracker extends BaseDeviceTracker<GoogDeviceDescriptor, never
     protected onSocketOpen(): void {
         // nothing here;
     }
+
+    protected buildDeviceTable(): void {
+        super.buildDeviceTable();
+        this.addTileViewBar();
+        if (this.activeTileView) {
+            this.activeTileView.updateDevices(this.descriptors, (udid) => this.getWsUrlForDevice(udid));
+        }
+    }
+
+    private addTileViewBar(): void {
+        const block = document.getElementById(this.elementId);
+        if (!block) {
+            return;
+        }
+        const existing = block.querySelector('.tile-view-bar');
+        if (existing) {
+            existing.remove();
+        }
+        const activeWithPid = this.descriptors.filter(
+            (d) => d.state === DeviceState.DEVICE && d.pid !== -1,
+        );
+        const bar = document.createElement('div');
+        bar.className = 'tile-view-bar';
+        const btn = document.createElement('button');
+        btn.className = 'tile-view-button';
+        const count = activeWithPid.length;
+        btn.innerText = count > 0 ? `Tile ${count} device${count !== 1 ? 's' : ''}` : 'Tile devices';
+        btn.disabled = count === 0;
+        btn.title = count === 0 ? 'No active devices with a running server' : `Open all ${count} streams side-by-side`;
+        btn.onclick = this.onTileAllClick;
+        bar.appendChild(btn);
+        const nameEl = block.querySelector('.tracker-name');
+        if (nameEl && nameEl.nextSibling) {
+            block.insertBefore(bar, nameEl.nextSibling);
+        } else {
+            block.appendChild(bar);
+        }
+    }
+
+    private getWsUrlForDevice(udid: string): string {
+        const fullName = `${this.id}_${Util.escapeUdid(udid)}`;
+        const selectName = encodeURIComponent(`${DeviceTracker.AttributePrefixInterfaceSelectFor}${fullName}`);
+        const elements = document.getElementsByName(selectName);
+        if (elements && elements.length) {
+            const select = elements[0] as HTMLSelectElement;
+            const option = select.options[select.selectedIndex];
+            const url = option?.getAttribute(Attribute.URL);
+            if (url) {
+                return url;
+            }
+        }
+        return DeviceTracker.createUrl(this.params, udid).toString();
+    }
+
+    private onTileAllClick = (): void => {
+        const activeDevices = this.descriptors.filter(
+            (d) => d.state === DeviceState.DEVICE && d.pid !== -1,
+        );
+        if (!activeDevices.length) {
+            return;
+        }
+        const entries = activeDevices.map((d) => ({
+            descriptor: d,
+            ws: this.getWsUrlForDevice(d.udid),
+        }));
+        this.activeTileView = new TileView(entries, () => {
+            this.activeTileView = undefined;
+            this.setBodyClass('list');
+        });
+    };
 
     protected setIdAndHostName(id: string, hostName: string): void {
         super.setIdAndHostName(id, hostName);
