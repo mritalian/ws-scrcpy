@@ -46,6 +46,7 @@ export class TileView {
         this.overlay.appendChild(this.grid);
 
         document.body.appendChild(this.overlay);
+        window.addEventListener('resize', this.onWindowResize);
 
         entries.forEach(({ descriptor, ws }) => this.addTile(descriptor, ws));
         this.relayout();
@@ -108,6 +109,10 @@ export class TileView {
         this.streamMap.set(udid, { stream, cell });
     }
 
+    private onWindowResize = (): void => {
+        this.relayout();
+    };
+
     private relayout(): void {
         const n = this.streamMap.size;
         if (n === 0) {
@@ -116,14 +121,53 @@ export class TileView {
             this.grid.style.gridTemplateRows = '';
             return;
         }
-        const cols = Math.ceil(Math.sqrt(n));
+        const cols = this.computeOptimalCols(n);
         const rows = Math.ceil(n / cols);
         this.grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
         this.grid.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
         this.titleEl.innerText = `Tile view — ${n} device${n !== 1 ? 's' : ''}`;
     }
 
+    // Pick the column count that maximises the rendered area of a portrait phone
+    // (9:16 aspect ratio) inside each tile. Tries every possible column count
+    // from 1 to N and picks the winner — this naturally prefers fewer rows when
+    // the window is landscape and phones are portrait.
+    private computeOptimalCols(n: number): number {
+        const W = this.grid.clientWidth || window.innerWidth;
+        const H = this.grid.clientHeight || window.innerHeight;
+        const PHONE_ASPECT = 9 / 16; // width / height
+        const HEADING_PX = 22;       // approximate per-tile heading bar height
+
+        let bestCols = 1;
+        let bestArea = 0;
+
+        for (let cols = 1; cols <= n; cols++) {
+            const rows = Math.ceil(n / cols);
+            const tileW = W / cols;
+            const tileH = H / rows - HEADING_PX;
+            if (tileH <= 0) {
+                continue;
+            }
+            // Area of phone content that would be visible (object-fit: contain)
+            let area: number;
+            if (tileW / tileH > PHONE_ASPECT) {
+                // Tile is wider than phone → height-constrained
+                area = tileH * tileH * PHONE_ASPECT;
+            } else {
+                // Tile is narrower than phone → width-constrained
+                area = tileW * tileW / PHONE_ASPECT;
+            }
+            if (area > bestArea) {
+                bestArea = area;
+                bestCols = cols;
+            }
+        }
+
+        return bestCols;
+    }
+
     private close(onClose: () => void): void {
+        window.removeEventListener('resize', this.onWindowResize);
         for (const { stream } of this.streamMap.values()) {
             stream.stop();
         }
