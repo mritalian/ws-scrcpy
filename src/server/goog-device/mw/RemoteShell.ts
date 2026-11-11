@@ -17,8 +17,8 @@ export class RemoteShell extends Mw {
     public static readonly TAG = 'RemoteShell';
     private term?: IPty;
     private initialized = false;
-    private timeoutString: NodeJS.Timeout | null = null;
-    private timeoutBuffer: NodeJS.Timeout | null = null;
+    private timeoutString: ReturnType<typeof setTimeout> | null = null;
+    private timeoutBuffer: ReturnType<typeof setTimeout> | null = null;
     private terminated = false;
     private closeCode = 1000;
     private closeReason = '';

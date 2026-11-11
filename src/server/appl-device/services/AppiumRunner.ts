@@ -251,8 +251,8 @@ export class AppiumRunner extends ProcessRunner<ProcessRunnerEvents> {
             AppiumRunner.killGroup(pid, 'SIGKILL');
         }, 5000);
         // Don't keep the event loop alive just for the fallback timer during shutdown.
-        if (typeof (timer as { unref?: () => void }).unref === 'function') {
-            (timer as { unref: () => void }).unref();
+        if (typeof (timer as unknown as { unref?: () => void }).unref === 'function') {
+            (timer as unknown as { unref: () => void }).unref();
         }
     }
 }

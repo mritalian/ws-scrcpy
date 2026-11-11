@@ -5,7 +5,7 @@ import AdbKitClient from '@dead50f7/adbkit/lib/adb/client';
 import { AdbExtended } from '../adb';
 import GoogDeviceDescriptor from '../../../types/GoogDeviceDescriptor';
 import Tracker from '@dead50f7/adbkit/lib/adb/tracker';
-import Timeout = NodeJS.Timeout;
+type Timeout = ReturnType<typeof setTimeout>;
 import { BaseControlCenter } from '../../services/BaseControlCenter';
 import { ControlCenterCommand } from '../../../common/ControlCenterCommand';
 import * as os from 'os';

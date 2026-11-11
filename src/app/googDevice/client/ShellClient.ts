@@ -1,5 +1,9 @@
 import 'xterm/css/xterm.css';
 import { ManagerClient } from '../../client/ManagerClient';
+// xterm ships its own type declarations (typings/xterm.d.ts). Keep the build working if an
+// interrupted install left them out; when present, this import still uses the real types.
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore xterm ships its own types; tolerate a damaged install missing them.
 import { Terminal } from 'xterm';
 import { AttachAddon } from 'xterm-addon-attach';
 import { FitAddon } from 'xterm-addon-fit';

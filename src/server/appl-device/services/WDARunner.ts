@@ -50,7 +50,7 @@ export class WdaRunner extends TypedEmitter<WdaRunnerEvents> {
     private sessionId?: string;
     private wdaLocalPort = 0;
     private holders = 0;
-    protected releaseTimeoutId?: NodeJS.Timeout;
+    protected releaseTimeoutId?: ReturnType<typeof setTimeout>;
 
     constructor(private readonly udid: string) {
         super();
