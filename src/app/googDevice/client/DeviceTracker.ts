@@ -38,6 +38,8 @@ export class DeviceTracker extends BaseDeviceTracker<GoogDeviceDescriptor, never
     protected static tools: Set<Tool> = new Set();
     protected tableId = 'goog_device_list';
     private activeTileView?: TileView;
+    private readonly autoTileRequested = DeviceTracker.isTileRequested();
+    private autoTileOpened = false;
 
     public static start(hostItem: HostItem): DeviceTracker {
         const url = this.buildUrlForTracker(hostItem).toString();
@@ -66,9 +68,24 @@ export class DeviceTracker extends BaseDeviceTracker<GoogDeviceDescriptor, never
     protected buildDeviceTable(): void {
         super.buildDeviceTable();
         this.addTileViewBar();
+        if (this.autoTileRequested && !this.autoTileOpened) {
+            // A dedicated tile tab should come up immediately, even before the
+            // first device list arrives, then fill in as devices attach.
+            this.autoTileOpened = true;
+            this.openTileView([]);
+        }
         if (this.activeTileView) {
             this.activeTileView.updateDevices(this.descriptors, (udid) => this.getWsUrlForDevice(udid));
         }
+    }
+
+    private static isTileRequested(): boolean {
+        const hashQuery = new URLSearchParams(location.hash.replace(/^#!/, ''));
+        const searchQuery = new URLSearchParams(location.search);
+        return (
+            ['1', 'true'].includes(hashQuery.get('tile') || '') ||
+            ['1', 'true'].includes(searchQuery.get('tile') || '')
+        );
     }
 
     private addTileViewBar(): void {
@@ -116,21 +133,28 @@ export class DeviceTracker extends BaseDeviceTracker<GoogDeviceDescriptor, never
         return DeviceTracker.createUrl(this.params, udid).toString();
     }
 
-    private onTileAllClick = (): void => {
-        const activeDevices = this.descriptors.filter(
-            (d) => d.state === DeviceState.DEVICE && d.pid !== -1,
-        );
-        if (!activeDevices.length) {
-            return;
-        }
-        const entries = activeDevices.map((d) => ({
-            descriptor: d,
-            ws: this.getWsUrlForDevice(d.udid),
-        }));
+    private getActiveTileEntries(): Array<{ descriptor: GoogDeviceDescriptor; ws: string }> {
+        return this.descriptors
+            .filter((d) => d.state === DeviceState.DEVICE && d.pid !== -1)
+            .map((d) => ({
+                descriptor: d,
+                ws: this.getWsUrlForDevice(d.udid),
+            }));
+    }
+
+    private openTileView(entries: Array<{ descriptor: GoogDeviceDescriptor; ws: string }>): void {
         this.activeTileView = new TileView(entries, () => {
             this.activeTileView = undefined;
             this.setBodyClass('list');
         });
+    }
+
+    private onTileAllClick = (): void => {
+        const entries = this.getActiveTileEntries();
+        if (!entries.length) {
+            return;
+        }
+        this.openTileView(entries);
     };
 
     protected setIdAndHostName(id: string, hostName: string): void {
